@@ -9,8 +9,9 @@
 
 用法：
 
-    python -m ecom_runtime.mcp_server --transport stdio     # 给本地客户端
-    python -m ecom_runtime.mcp_server --transport http      # 服务化，默认只绑 127.0.0.1
+    python -m ecom_runtime.mcp_server --selfcheck --offline   # 离线协议自检
+    python -m ecom_runtime.mcp_server --transport stdio       # 给本地客户端
+    python -m ecom_runtime.mcp_server --transport http        # 服务化，默认只绑 127.0.0.1
 """
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ import json
 
 from ecom_shared.mcp import serve_http, serve_stdio
 
+from .config import enable_offline
 from .runtime import AgentRuntime
 
 SERVER_NAME = "ecom-agent-runtime"
@@ -72,7 +74,16 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8001)
     parser.add_argument("--selfcheck", action="store_true", help="只跑协议自检后退出")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="离线模式：mock 模型 + lexical 检索，不需要任何 Key（clone 下来就能跑）",
+    )
     args = parser.parse_args()
+
+    # 必须在任何 build_runtime() 之前 —— 配置是在组装集群时读取的
+    if args.offline:
+        enable_offline()
 
     if args.selfcheck:
         asyncio.run(_selfcheck())

@@ -1,7 +1,7 @@
 """端到端演示：售前咨询 Agent 完整闭环（意图路由 → 检索 → 生成 → 素材草稿）。
 
-    python -m scripts.demo              # 默认离线（.env 里 LLM_PROVIDER=mock）
-    python -m scripts.demo --engine react-loop
+    python -m scripts.demo --offline            # 零配置离线跑（不需要任何 Key）
+    python -m scripts.demo --engine react-loop  # 换另一条引擎
 
 演示的重点不是"回答得多好"，而是三条**能被追问的链路真的通了**：
 1. 检索：命中知识库并带上来源；
@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 
+from ecom_runtime.config import enable_offline
 from ecom_runtime.mcp_server import build_runtime
 
 SAMPLES = [
@@ -27,7 +28,16 @@ async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--engine", default="langgraph", choices=("langgraph", "react-loop"))
     parser.add_argument("--rebuild", action="store_true", help="先重建索引再演示")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="离线模式：mock 模型 + lexical 检索，不需要任何 Key（clone 下来就能跑）",
+    )
     args = parser.parse_args()
+
+    # 必须在 build_runtime() 之前 —— 配置是在组装集群时读取的
+    if args.offline:
+        enable_offline()
 
     # 延迟导入：这里是为了让脚本能单独跑，而不是把业务 Agent 编进底座依赖
     from ecom_runtime.agents import PresaleAgent

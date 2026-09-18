@@ -12,7 +12,13 @@ from ecom_shared import ConfigError
 
 from ecom_runtime import ENGINES, AgentRuntime, ReActLoop
 from ecom_runtime.agents import PresaleAgent, catalog
-from ecom_runtime.config import MAX_ITERATIONS_DEFAULT, RuntimeSettings, load_runtime_settings
+from ecom_runtime.config import (
+    MAX_ITERATIONS_DEFAULT,
+    OFFLINE_ENV,
+    RuntimeSettings,
+    enable_offline,
+    load_runtime_settings,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -58,6 +64,46 @@ def test_invalid_max_iterations_rejected(monkeypatch):
     monkeypatch.setenv("MAX_ITERATIONS", "abc")
     with pytest.raises(ConfigError, match="MAX_ITERATIONS"):
         load_runtime_settings(env_file=None, load_env_file=False)
+
+
+# ---------------------------------------------------------------------------
+# 离线开关：保证"clone 下来零配置就能跑"
+# ---------------------------------------------------------------------------
+def test_enable_offline_makes_settings_loadable_without_any_key(monkeypatch):
+    """这是回归测试，对应一个真实故障。
+
+    原先四个面向人的入口（demo / evolve / --selfcheck）在干净 clone 里**全部直接报错**：
+    `.env` 是 gitignore 的、干净 clone 里根本不存在，provider 落到默认的 `dashscope`
+    又没 Key，于是 fail-fast。而 `pytest` 却能过 —— 因为测试自己在 conftest 里钉了 mock。
+    「测试全绿」完全掩盖了「人跑不起来」。
+    """
+    for key in ("LLM_API_KEY", "API_KEY", "DASHSCOPE_API_KEY"):
+        monkeypatch.setenv(key, "")
+    monkeypatch.setenv("LLM_PROVIDER", "dashscope")
+    with pytest.raises(ConfigError):  # 先确认基线确实会失败
+        load_runtime_settings(env_file=None, load_env_file=False)
+
+    enable_offline()
+
+    settings = load_runtime_settings(env_file=None, load_env_file=False)
+    assert settings.is_mock
+    assert settings.vector_backend == "lexical"
+
+
+def test_enable_offline_overrides_configured_provider(monkeypatch):
+    """显式加了 --offline 就该压过 .env 里的真实厂商配置，否则开关会静默失效。"""
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("LLM_API_KEY", "sk-something")
+    enable_offline()
+    assert load_runtime_settings(env_file=None, load_env_file=False).is_mock
+
+
+def test_offline_env_also_pins_vector_backend(monkeypatch):
+    """光钉 provider 不够：VECTOR_BACKEND 默认是 chroma，而 chromadb 是可选依赖、默认不装。"""
+    assert set(OFFLINE_ENV) == {"LLM_PROVIDER", "VECTOR_BACKEND"}
+    monkeypatch.setenv("VECTOR_BACKEND", "chroma")
+    enable_offline()
+    assert load_runtime_settings(env_file=None, load_env_file=False).vector_backend == "lexical"
 
     monkeypatch.setenv("MAX_ITERATIONS", "0")
     with pytest.raises(ConfigError):

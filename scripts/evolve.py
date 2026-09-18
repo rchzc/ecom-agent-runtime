@@ -1,6 +1,6 @@
 """自进化演示：制造一批失败 → 分析失败模式 → 提补丁 → 回放验证补丁有没有用。
 
-    python -m scripts.evolve
+    python -m scripts.evolve --offline
 
 演示刻意用**真的坏掉**的工具（`rag_search` 每次调用都抛异常）来制造失败，
 而不是伪造几条失败轨迹 —— 伪造的话，后面"通过率提升"就没有意义了。
@@ -23,6 +23,7 @@ from typing import Any
 
 from ecom_shared import setup_logging
 
+from ecom_runtime.config import enable_offline
 from ecom_runtime.mcp_server import build_runtime
 
 QUERIES = [
@@ -43,7 +44,16 @@ async def main() -> None:
         action="store_true",
         help="打印 INFO 级结构化日志（可以看到每一次工具调用的失败明细）",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="离线模式：mock 模型 + lexical 检索，不需要任何 Key（clone 下来就能跑）",
+    )
     args = parser.parse_args()
+
+    # 必须在 build_runtime() 之前 —— 配置是在组装集群时读取的
+    if args.offline:
+        enable_offline()
 
     runtime = build_runtime()
     # 默认压到 WARNING：故障注入会制造几十条同构的工具失败日志，

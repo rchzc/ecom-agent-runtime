@@ -27,6 +27,37 @@ DEFAULT_TRACE_DIR = os.path.join(REPO_ROOT, "var", "traces")
 #: 是因为它同时是"自进化"里一个失败模式的判据（撞上限 = 需要优化编排）。
 MAX_ITERATIONS_DEFAULT = 6
 
+#: 离线运行要钉死的两个变量。
+#:
+#: `VECTOR_BACKEND=lexical` 也是必需的：默认值是 `chroma`，而 chromadb 是共享包的可选依赖
+#: （`pip install ecom-agent-shared[chroma]`），默认不装。不钉这一项，"离线可跑"就不成立。
+OFFLINE_ENV: dict[str, str] = {
+    "LLM_PROVIDER": "mock",
+    "VECTOR_BACKEND": "lexical",
+}
+
+
+def enable_offline() -> None:
+    """把当前进程钉成离线模式：mock 模型 + lexical 检索，不联网、不需要任何 Key。
+
+    **为什么不直接让"没有 Key 就自动用 mock"**：共享包刻意把 mock 做成**显式 provider**
+    而不是隐性降级（见 `ecom_shared/gateway/mock.py` 的说明）—— "悄悄降级"会让人以为
+    Key 配好了其实没生效，是最难排查的一类问题。所以默认行为保持 fail-fast，
+    离线必须是**被明确要求**的：要么设这个环境变量，要么在命令行加 `--offline`。
+
+    ⚠️ 已经踩过一次：README 一度写着"零成本、无需任何 Key"，但干净 clone 里没有 `.env`
+    （`.env` 是 gitignore 的），provider 落到默认的 `dashscope` 又没 Key，
+    于是 `scripts.demo` / `scripts.evolve` / `--selfcheck` **四个入口全部直接报错**，
+    而 `pytest` 却能过 —— 因为测试自己在 conftest 里钉了 mock。
+    「测试全绿」完全掩盖了「人跑不起来」。所有面向人的入口都必须能被零配置跑通。
+
+    覆盖（而不是 `setdefault`）是刻意的：用户显式加了 `--offline`，
+    就该压过 `.env` 里的真实厂商配置，否则这个开关在配好 Key 的机器上会静默失效。
+    （`load_dotenv` 默认不覆盖已有环境变量，所以这里先设就先赢。）
+    """
+    for key, value in OFFLINE_ENV.items():
+        os.environ[key] = value
+
 
 @dataclass(frozen=True)
 class RuntimeSettings(Settings):
@@ -70,6 +101,8 @@ def load_runtime_settings(
 __all__ = [
     "RuntimeSettings",
     "load_runtime_settings",
+    "enable_offline",
+    "OFFLINE_ENV",
     "REPO_ROOT",
     "DEFAULT_ENV_FILE",
     "DEFAULT_DOCS_DIR",

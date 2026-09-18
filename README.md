@@ -101,7 +101,7 @@ ecom-agent-runtime/
 │   ├── ingest.py            文档入库
 │   ├── demo.py              端到端演示（--engine 选引擎）
 │   └── evolve.py            自进化闭环演示（含故障注入）
-├── tests/                   87 个测试，全部离线可跑
+├── tests/                   90 个测试，全部离线可跑
 ├── data/docs/<业务域>/*.md  知识库样例（目录即域，检索按域过滤）
 ├── pyproject.toml           依赖方向 + pytest 配置
 ├── requirements.txt         以 VCS 依赖安装共享集群
@@ -116,16 +116,24 @@ ecom-agent-runtime/
 python -m venv .venv && .venv/Scripts/activate     # Windows
 pip install -r requirements.txt
 
-python -m scripts.demo --rebuild                   # 端到端演示
-python -m scripts.demo --engine react-loop         # 换另一条引擎
-python -m scripts.evolve                           # 自进化闭环（含故障注入）
-python -m ecom_runtime.mcp_server --selfcheck      # MCP 协议自检
-python -m pytest -q                                # 87 个测试
+python -m scripts.demo --rebuild --offline          # 端到端演示
+python -m scripts.demo --engine react-loop --offline  # 换另一条引擎
+python -m scripts.evolve --offline                  # 自进化闭环（含故障注入）
+python -m ecom_runtime.mcp_server --selfcheck --offline  # MCP 协议自检
+python -m pytest -q                                 # 90 个测试
 ```
 
-> `LLM_PROVIDER=mock` 是**显式 provider**，不是"没有 key 时的隐性降级"。
-> 区别很重要：隐性降级会让人以为 key 配好了其实没生效。
+> `--offline` 把模型钉成 `mock`、检索钉成 `lexical`，不联网也不需要 Key。
 > 离线模式下编排、检索、工具调用、失败归因、回放**全部真实执行**，只有推理文本是占位。
+
+**为什么离线要显式加参数，而不是"没配 Key 就自动用 mock"**：
+mock 是**显式 provider**，不是隐性降级。隐性降级会让人以为 Key 配好了其实没生效 ——
+这是最难排查的一类问题。所以不给 Key 时的默认行为是**明确报错**并告诉你两条路：
+
+```
+ConfigError: 缺少 LLM_API_KEY。当前 provider=dashscope（阿里云百炼），
+请填入对应厂商的 API Key，或改用 LLM_PROVIDER=mock 离线运行。
+```
 
 接入真实模型只需改 `.env` 里的 `LLM_PROVIDER` + `LLM_API_KEY`，业务代码零改动
 （`api_base` 由厂商 preset 自动带出，要自建网关时才需要覆盖 `LLM_API_BASE`）：
