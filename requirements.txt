@@ -1,0 +1,7 @@
+# 核心依赖（可投入使用，极简）
+numpy
+python-dotenv
+openai          # openai-compatible 客户端，接 DeepSeek/百炼/OpenAI
+
+# 可选（演示前端，不装也能跑 CLI demo）
+# streamlit

@@ -1,0 +1,49 @@
+<svg viewBox="0 0 720 490" xmlns="http://www.w3.org/2000/svg" font-family="sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#6b7280"/>
+    </marker>
+  </defs>
+
+  <text x="30" y="32" font-size="17" font-weight="bold" fill="#111827">电商生态 AI 架构 · 运行时底座 + 售前咨询 Agent</text>
+  <text x="30" y="50" font-size="11" fill="#6b7280">自研 ReAct Loop 保留为原理对照 · 主链路用 LangGraph 状态图落地</text>
+
+  <!-- ① 业务 Agent 层 -->
+  <rect x="30" y="66" width="660" height="64" rx="8" fill="#fff7ed" stroke="#f59e0b" stroke-width="2"/>
+  <text x="46" y="88" font-size="13" font-weight="bold" fill="#b45309">① 业务 Agent 层（橙）</text>
+  <rect x="46" y="94" width="400" height="26" rx="4" fill="#f59e0b" fill-opacity="0.18" stroke="#f59e0b"/>
+  <text x="56" y="111" font-size="12" fill="#92400e">售前实时咨询 Agent（意图路由 + 多模态回复）</text>
+
+  <!-- ② 数据·素材中枢 -->
+  <rect x="30" y="148" width="660" height="64" rx="8" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+  <text x="46" y="170" font-size="13" font-weight="bold" fill="#047857">② 数据·素材中枢（绿）</text>
+  <rect x="46" y="176" width="300" height="26" rx="4" fill="#10b981" fill-opacity="0.18" stroke="#10b981"/>
+  <text x="56" y="193" font-size="12" fill="#065f46">RAG 知识库（numpy 向量 + source 过滤）</text>
+  <rect x="362" y="176" width="312" height="26" rx="4" fill="#10b981" fill-opacity="0.18" stroke="#10b981"/>
+  <text x="372" y="193" font-size="12" fill="#065f46">多模态素材中心（图prompt/视频/话术）</text>
+
+  <!-- ③ 底座基础设施 -->
+  <rect x="30" y="230" width="660" height="104" rx="8" fill="#eff6ff" stroke="#3b82f6" stroke-width="2"/>
+  <text x="46" y="252" font-size="13" font-weight="bold" fill="#1d4ed8">③ 底座基础设施（蓝）</text>
+  <rect x="46" y="258" width="190" height="26" rx="4" fill="#3b82f6" fill-opacity="0.18" stroke="#3b82f6"/>
+  <text x="56" y="275" font-size="12" fill="#1e40af">MCP 共享集群</text>
+  <rect x="252" y="258" width="190" height="26" rx="4" fill="#3b82f6" fill-opacity="0.18" stroke="#3b82f6"/>
+  <text x="262" y="275" font-size="12" fill="#1e40af">LLM Gateway 路由</text>
+  <rect x="458" y="258" width="190" height="26" rx="4" fill="#3b82f6" fill-opacity="0.18" stroke="#3b82f6"/>
+  <text x="468" y="275" font-size="12" fill="#1e40af">意图路由 Agent</text>
+  <rect x="46" y="292" width="602" height="24" rx="4" fill="#ffffff" stroke="#93c5fd"/>
+  <text x="56" y="308" font-size="12" fill="#1e40af">共享工具：rag_search · merchant_query · notify · alert（任意 Agent 即插即用）</text>
+
+  <!-- ④ 对外通道 -->
+  <polygon points="360,360 452,398 360,436 268,398" fill="#f3f4f6" stroke="#9ca3af" stroke-width="2"/>
+  <text x="300" y="395" font-size="12" fill="#374151">④ 对外通道（菱）</text>
+  <text x="300" y="412" font-size="11" fill="#6b7280">商户 / 飞书·N8N / 三方 API</text>
+
+  <!-- 箭头 -->
+  <line x1="360" y1="334" x2="360" y2="356" stroke="#6b7280" stroke-width="2" marker-end="url(#arrow)"/>
+  <line x1="220" y1="130" x2="200" y2="146" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="510" y1="130" x2="510" y2="146" stroke="#9ca3af" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="610" y1="290" x2="630" y2="390" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+
+  <text x="30" y="470" font-size="10" fill="#9ca3af">实线=主链路调用　虚线=对外通道　颜色=架构四层（橙/绿/蓝/灰）</text>
+</svg>
