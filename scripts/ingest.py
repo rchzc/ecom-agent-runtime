@@ -1,46 +1,33 @@
-"""文档入库：扫描 data/docs/*.md，按文件名前缀映射业务线 source，向量化存入本地。"""
-import glob
+"""文档入库：把 `data/docs/<业务域>/*.md` 切分、向量化、写进向量库。
+
+    python -m scripts.ingest
+
+**业务域由目录决定，不由文件名前缀决定**。早期版本靠 `01_` `02_` 这类文件名前缀
+映射业务域，结果是"改个文件名就换了域"，而且没人看得出来。目录即域之后，
+检索按域过滤这件事才有稳定的依据。
+"""
+from __future__ import annotations
+
+import asyncio
 import os
-import sys
-from collections import Counter
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from config import DOCS_DIR
-from core.rag_service import RAGService
-
-# 文件名前缀 -> source 业务线
-_SOURCE_MAP = {
-    "01": "product", "02": "review", "03": "ad",
-    "04": "logistics", "05": "listing",
-}
+from ecom_runtime import AgentRuntime
+from ecom_runtime.mcp_server import build_runtime
 
 
-def _detect_source(fname: str) -> str:
-    for prefix, src in _SOURCE_MAP.items():
-        if fname.startswith(prefix):
-            return src
-    return "default"
+async def main() -> None:
+    runtime: AgentRuntime = build_runtime()
+    docs_dir = runtime.settings.docs_dir
 
-
-def main():
-    files = sorted(glob.glob(os.path.join(DOCS_DIR, "*.md")))
-    if not files:
-        print(f"[ingest] 未找到文档：{DOCS_DIR}")
+    if not os.path.isdir(docs_dir):
+        print(f"[ingest] 目录不存在：{docs_dir}")
         return
-    docs = []
-    for f in files:
-        with open(f, encoding="utf-8") as fh:
-            text = fh.read()
-        fname = os.path.basename(f)
-        docs.append({"id": fname, "text": text, "source": _detect_source(fname)})
-    rag = RAGService()
-    rag.build_from_docs(docs)
-    cnt = Counter(d["source"] for d in docs)
-    print(f"[ingest] 完成：{len(files)} 篇文档 -> {rag.count()} 个文本块")
-    for k, v in cnt.items():
-        print(f"  - source={k}: {v} 篇")
+
+    report = await runtime.ingest(docs_dir)
+    payload = report.to_dict() if hasattr(report, "to_dict") else report
+    print(f"[ingest] 完成：{payload}")
+    print(f"[ingest] 切片总数：{runtime.cluster.rag.count()}")
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

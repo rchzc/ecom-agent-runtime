@@ -1,7 +1,8 @@
-# 核心依赖（可投入使用，极简）
-numpy
-python-dotenv
-openai          # openai-compatible 客户端，接 DeepSeek/百炼/OpenAI
+# 运行时底座依赖清单
+#
+# 共享集群不在 PyPI 上，用 VCS 依赖装 —— 这也顺带证明了「底座真的依赖共享包」：
+# 依赖关系出现在安装产物里，而不是只写在文档里。
+ecom-agent-shared @ git+https://github.com/rchzc/ecom-agent-shared.git@main
 
-# 可选（演示前端，不装也能跑 CLI demo）
-# streamlit
+# 编排：状态图那一条路径用它；自研 Loop 路径不依赖它
+langgraph>=0.2

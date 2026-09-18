@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ecom-agent-runtime"
+version = "1.0.0"
+description = "自进化 Agent 运行时底座：双引擎编排（ReAct Loop / LangGraph）+ 轨迹回放 + Prompt 自优化"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Li Wenyu" }]
+keywords = ["agent", "react-loop", "langgraph", "mcp", "self-evolving"]
+
+# 依赖方向写在这里，不是写在文档里：
+# 运行时底座依赖共享集群，共享集群反过来不认识任何业务包。
+dependencies = [
+    "ecom-agent-shared>=1.0.0",
+    "langgraph>=0.2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[tool.setuptools]
+packages = ["ecom_runtime", "ecom_runtime.agents"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+asyncio_mode = "auto"
+addopts = "-q"
