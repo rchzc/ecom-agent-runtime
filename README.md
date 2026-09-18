@@ -1,68 +1,86 @@
-# 电商 Agent 运行时底座与 MCP 共享服务集群
+# 自进化 Agent 运行时底座
 
-> 跨境电商 AI 应用作品集 · 「[电商生态 AI 架构](#生态全景)」的**底座层**
-> 双引擎运行时（自研 ReAct Loop + LangGraph）· MCP 工具集群 · LLM Gateway 成本路由 · Agent 公共链路
-> 附带一个 **售前实时咨询 Agent** 作为底座的能力验证样例
+> 跨境电商 AI 应用作品集 · 生态的**底座层**
+> 双引擎编排（自研 ReAct Loop + LangGraph）· 自进化闭环（轨迹 → 归因 → 补丁 → 回放）· MCP 工具服务
+> 附带一个 **售前实时咨询 Agent** 验证底座能跑通真实业务链路
+
+底座不自己实现模型接入、检索、记忆与工具协议 —— 那些在
+[`ecom-agent-shared`](https://github.com/rchzc/ecom-agent-shared)（共享集群）里。
+本仓库只做**编排、留痕与自进化**。
 
 ---
 
 ## 这个仓库解决什么问题
 
-上层每写一个业务 Agent，就要重写一遍「怎么编排、怎么调工具、怎么接模型、怎么处理失败」——这是重复劳动，也是每个 Agent 各自为战的根源。
+上层每写一个业务 Agent，就要重写一遍「怎么编排、怎么调工具、怎么处理失败」。
+更麻烦的是**失败之后没人知道改的那句 Prompt 到底有没有用** —— 调完上线，问题还在。
 
-本仓库把这些能力收敛成**一套底座**，让上层 Agent 只关心业务本身：
+本仓库把这两件事收敛成一套底座：
 
-| 底座能力 | 实现 | 目录 |
+| 能力 | 做了什么 | 实现 |
 | --- | --- | --- |
-| **编排** | 自研 ReAct Loop（推理 → 工具 → 观察 → 反思）与 LangGraph 状态图各一版；节点可独立测试，编排过程不是黑盒 | `agents/loop_engine.py`、`agents/graph_agent.py` |
-| **工具** | MCP 工具集群，工具注册为 `name -> {func, schema}`，语义对齐 MCP `tools/call`；多 Agent 共享同一套工具 | `mcp_server/server.py` |
-| **模型接入** | LLM Gateway：四家厂商统一走 OpenAI 兼容协议，按任务复杂度路由轻 / 重模型；换厂商只改 `.env` | `core/llm_gateway.py` |
-| **检索** | RAG as a Service：自研轻量向量库（numpy 余弦 + `source` 元数据过滤），知识库一次构建、多 Agent 共享 | `core/rag_service.py`、`core/embedder.py` |
-| **记忆** | 多轮会话记忆（替代 Redis 会话态），按会话隔离 | `core/memory.py` |
-| **路由** | 意图路由：把用户输入判定到 5 类业务线，再决定检索哪个域 | `agents/intent_router.py` |
+| **双引擎编排** | LangGraph 状态图（流程由代码决定）与自研 ReAct Loop（下一步由模型决定）并存，**产出同一种 Trace** | `ecom_runtime/graph.py`、`ecom_runtime/loop.py` |
+| **自进化闭环** | 落轨迹 → 按失败模式归因 → 提补丁 → **回放同一批用例比通过率**，只有真的上升才采纳 | `ecom_runtime/evolution.py` |
+| **策略注入** | `policy` 参数让自进化能把「同一工具失败到上限就禁用」这类**编排策略**注入循环 | `ecom_runtime/loop.py` |
+| **意图路由** | 规则分类把问题判到 5 类业务域，决定检索范围（闭集短文本，不值得花一次模型调用） | `ecom_runtime/intent.py` |
+| **MCP 服务** | 把注册的工具用标准 MCP 暴露，stdio / HTTP 两种传输共用同一套 JSON-RPC 处理 | `ecom_runtime/mcp_server.py` |
+| **组装收敛** | `AgentRuntime.build()` 一个入口装齐全套，业务侧不再各自 new 一遍 | `ecom_runtime/runtime.py` |
 
-**样例 Agent**：`apps/presale_agent/` 走完整链路——用户问商品 → 意图路由 → LangGraph 状态图编排 → 经 MCP 调 RAG / 商户工具 → LLM Gateway 路由模型 → 生成文字回答 + 可投放多模态素材（图片 prompt / 短视频脚本 / 直播话术）。它证明这套底座**能跑通一条真实业务链路**，而不是只有抽象接口。
+**样例 Agent**：`ecom_runtime/agents/presale.py` 走完整链路 ——
+用户问商品 → 意图路由 → 编排引擎 → 经 MCP 调 RAG / 商品 / 预约工具 → 生成回答 + 可投放素材草稿。
 
 ---
 
-## 架构位置
+## 自进化闭环：这个仓库最该被追问的部分
 
-```mermaid
-graph TB
-    subgraph L1[业务 Agent 层·橙]
-        PA[售前实时咨询 Agent<br/>LangGraph 状态图编排]
-    end
-    subgraph L2[数据·素材中枢·绿]
-        KB[(RAG 知识库<br/>numpy 向量检索 + source 过滤)]
-        MM[多模态素材中心<br/>图片prompt/视频脚本/话术]
-    end
-    subgraph L3[底座基础设施·蓝]
-        MCP[MCP & Agent 共享集群<br/>rag_search / merchant_query / notify / alert]
-        GW[LLM Gateway<br/>复杂度路由 轻/重模型]
-        IR[意图路由 Agent<br/>5 类业务线分类]
-        LG[LangGraph 编排<br/>intent→retrieve→generate→multimodal]
-    end
-    subgraph L4[对外通道·菱]
-        EXT[商户数据 / 飞书·N8N / 三方 API]
-    end
-    PA --> LG
-    LG --> IR
-    LG --> MCP
-    MCP --> KB
-    PA --> MM
-    GW --> PA
-    KB --> MM
-    MCP --> EXT
+Agent 的失败分两类，**它们的修法不一样**，混在一起谈就会一直修不好：
+
+| 失败类型 | 例子 | 修得掉吗 |
+| --- | --- | --- |
+| **模型可自纠** | 臆造了不存在的工具名 | 能 —— 在 Prompt 里加一条约束 |
+| **循环结构性** | 反复撞同一个工具报错 | **不能** —— 模型下一轮照样调，拦住它的是循环本身 |
+
+所以补丁分两类：`rule`（Prompt 约束）与 `policy`（编排策略）。
+只产出 Prompt 文字的自优化，遇到结构性失败会一直"报告已修复"却毫无变化。
+
+`python -m scripts.evolve` 用**真的坏掉的工具**跑一遍（故障注入 `rag_search` 每次抛异常）：
+
+```
+故障注入：rag_search 每次都失败，先制造一批失败轨迹
+  d29189b26d6f  fail  repeat_tool_error       迭代 6  阿迪达斯的广告 ACOS 太高了怎么降
+  8c48994cf2b5  fail  repeat_tool_error       迭代 6  这个类目现在还能不能进
+  0a57126104ce  fail  repeat_tool_error       迭代 6  差评率 4% 要怎么处理
+
+分析出 1 条补丁建议：
+  · patch-repeat_tool_error  证据 3 条  policy={'max_tool_errors_per_tool': 1}
+    同一个工具连续失败两次后必须停止调用它，改为基于已知信息作答并说明信息缺口。
+
+逐条回放验证（同一批查询，比补丁前后的通过率）
+  [采纳] patch-repeat_tool_error: 0% -> 100% (0->3 / 3)
 ```
 
-| 架构图层级 | 本仓库实现 |
-| --- | --- |
-| 业务 Agent（橙） | `apps/presale_agent/`（样例） |
-| 数据·素材中枢（绿） | `core/rag_service.py` + `apps/presale_agent/multimodal.py` |
-| **底座基础设施（蓝）· 本仓库主体** | `agents/` + `mcp_server/` + `core/llm_gateway.py` + `core/memory.py` |
-| 对外通道（菱） | `mcp_server` 的 `merchant_query` / `notify` / `alert` |
+两个刻意的设计选择：
 
-静态版架构图见 [`架构图_规范化.svg`](架构图_规范化.svg)。
+- **失败是"真的坏掉"造出来的，不是伪造几条失败轨迹。** 伪造的话，后面的"通过率提升"就没有意义了。
+- **回放同一批查询，不是另造一批。** 换一批用例再比等于没有对照组。
+
+---
+
+## 依赖关系
+
+```
+ecom-agent-shared（共享集群 · 可 pip 安装）
+        ↑
+ecom-agent-runtime（本仓库：编排 / 留痕 / 自进化）
+        ↑
+ecommerce-ai-workbench（数据中台 + 业务 Agent + 交付层）
+```
+
+单向依赖，写在 `pyproject.toml` 与 `requirements.txt` 里而不是只写在文档里。
+业务数据（商品、经营指标）通过**依赖注入**进来 —— `product_provider` 就是这条边界的实物，
+共享层不认识任何业务模块。
+
+架构图见 [`架构图_规范化.svg`](架构图_规范化.svg)。
 
 ---
 
@@ -70,28 +88,24 @@ graph TB
 
 ```
 ecom-agent-runtime/
-├── config.py                 全局配置，读 .env，无 key 自动降级 MOCK
-├── core/                     ← 底座：模型接入与检索基建
-│   ├── llm_gateway.py        LLM Gateway：openai-compatible + 复杂度路由
-│   ├── embedder.py           向量化（云端 embedding + 本地确定性降级）
-│   ├── rag_service.py        自研轻量向量库（numpy 余弦 + source 过滤）
-│   └── memory.py             多轮会话记忆（替代 Redis 会话态）
-├── mcp_server/
-│   └── server.py             MCP 工具集群（rag_search / merchant_query / notify / alert）
-├── agents/                   ← 底座：编排与路由
-│   ├── graph_agent.py        ★ LangGraph 状态图（主实现：意图→检索→生成→多模态）
-│   ├── loop_engine.py        自研 ReAct Loop（原理对比，非主路径）
-│   └── intent_router.py      意图路由（5 类业务线）
-├── apps/presale_agent/       ← 样例业务 Agent（验证底座能力）
-│   ├── agent.py              售前咨询入口（默认走 LangGraph）
-│   └── multimodal.py         多模态素材生成（图片prompt/视频脚本/话术）
-├── data/docs/                知识库样例（选品/评论/广告/物流/Listing）
+├── ecom_runtime/
+│   ├── runtime.py           ★ 门面：AgentRuntime.build() 一次组装
+│   ├── loop.py              ★ 自研 ReAct Loop（迭代计数 / 工具错误预算 / 轨迹留痕）
+│   ├── graph.py             ★ LangGraph 状态图（intent → retrieve → generate → [post]）
+│   ├── evolution.py         ★ 自进化：Trace / 失败归因 / 补丁 / 回放
+│   ├── intent.py            意图路由（规则分类，5 类业务域）
+│   ├── mcp_server.py        MCP 服务入口（stdio / HTTP / --selfcheck）
+│   ├── config.py            RuntimeSettings（继承共享层 Settings，避免重复解析）
+│   └── agents/              售前 Agent 样例：catalog / multimodal / presale
 ├── scripts/
-│   ├── ingest.py             文档入库（向量化）
-│   └── demo.py               端到端演示
-├── requirements.txt          numpy / python-dotenv / openai / langgraph / langchain-openai
-├── .env.example              DeepSeek / 百炼 / OpenAI 三套配置
-└── Dockerfile                python:3.13-slim，MOCK 可跑
+│   ├── ingest.py            文档入库
+│   ├── demo.py              端到端演示（--engine 选引擎）
+│   └── evolve.py            自进化闭环演示（含故障注入）
+├── tests/                   87 个测试，全部离线可跑
+├── data/docs/<业务域>/*.md  知识库样例（目录即域，检索按域过滤）
+├── pyproject.toml           依赖方向 + pytest 配置
+├── requirements.txt         以 VCS 依赖安装共享集群
+└── Dockerfile               非 root 运行 + HEALTHCHECK
 ```
 
 ---
@@ -101,51 +115,43 @@ ecom-agent-runtime/
 ```bash
 python -m venv .venv && .venv/Scripts/activate     # Windows
 pip install -r requirements.txt
-python scripts/ingest.py        # 文档入库（MOCK 向量）
-python scripts/demo.py          # 端到端演示（LangGraph 编排 + 自动触发 RAG 工具）
+
+python -m scripts.demo --rebuild                   # 端到端演示
+python -m scripts.demo --engine react-loop         # 换另一条引擎
+python -m scripts.evolve                           # 自进化闭环（含故障注入）
+python -m ecom_runtime.mcp_server --selfcheck      # MCP 协议自检
+python -m pytest -q                                # 87 个测试
 ```
 
-无 `API_KEY` 时自动降级 MOCK：LangGraph 编排 / RAG 检索 / 意图路由 / MCP 工具调用 / 多模态链路**全部真实跑通**，仅推理文本为占位。可直接演示与讲解架构。
+> `LLM_PROVIDER=mock` 是**显式 provider**，不是"没有 key 时的隐性降级"。
+> 区别很重要：隐性降级会让人以为 key 配好了其实没生效。
+> 离线模式下编排、检索、工具调用、失败归因、回放**全部真实执行**，只有推理文本是占位。
 
-## 接入真实模型
+接入真实模型只需改 `.env` 里的 `LLM_PROVIDER` + `LLM_API_KEY`，业务代码零改动
+（`api_base` 由厂商 preset 自动带出，要自建网关时才需要覆盖 `LLM_API_BASE`）：
+
+| `LLM_PROVIDER` | 默认 `api_base` | 模型（轻 / 重） |
+| --- | --- | --- |
+| `deepseek` | `https://api.deepseek.com/v1` | `deepseek-chat` / `deepseek-reasoner` |
+| `dashscope`（阿里云百炼） | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` / `qwen-max` |
+| `openai` | `https://api.openai.com/v1` | `gpt-4o-mini` / `gpt-4o` |
+| `ollama`（本地） | `http://localhost:11434/v1` | 按本地已拉取的模型填 `MODEL_LIGHT` / `MODEL_HEAVY` |
+
+把工具暴露给本地 MCP 客户端：
 
 ```bash
-cp .env.example .env
-# 在 .env 填入任一家的 API_KEY（DeepSeek / 百炼 / OpenAI）
-python scripts/ingest.py        # 用真实 embedding 重建知识库
-python scripts/demo.py          # 真模型推理
+python -m ecom_runtime.mcp_server --transport stdio   # stdout 是协议通道，日志走 stderr
+python -m ecom_runtime.mcp_server --transport http    # 默认只绑 127.0.0.1（该端点无鉴权）
 ```
-
-| 供应商 | API_BASE | 聊天（轻/重） | embedding |
-| --- | --- | --- | --- |
-| DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` / `deepseek-reasoner` | 无（保留 `MOCK_EMBED=true` 或换百炼） |
-| 阿里云百炼 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen-plus` / `qwen-max` | `text-embedding-v3` |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` / `gpt-4o` | `text-embedding-3-small` |
-
-> 关键点：模型供应商仅 `.env` 差异，业务代码零改动。
-
----
-
-## 体现的能力点
-
-- **双引擎运行时**：LangGraph 状态图把售前咨询拆成 `intent → retrieve → generate → multimodal` 节点，图可可视化、节点可独立测试；同时保留自研 ReAct Loop（`agents/loop_engine.py`）作为原理对照——LangGraph 底层同样是「推理→工具→观察→反思」，写得出这一版才说明不是只会调框架。
-- **MCP 工具标准化**：工具注册为 `name -> {func,schema}`，Agent 经 `call_tool` 调用，语义对齐 MCP `tools/call`；多 Agent 共享一套工具，新增工具不改调用方。
-- **RAG as a Service**：numpy 实现轻量向量检索 + `source` 元数据过滤隔离业务线，知识库一次构建被多 Agent 共享。
-- **LLM Gateway 成本优化**：`classify_complexity` 按任务复杂度路由轻 / 重模型，简单任务不占大模型额度。
-- **多模态内容生成**：咨询回答外自动产出图片 prompt / 短视频脚本 / 直播话术。
-- **故障隔离**：`notify` / `alert` 走 `try/except`，通知失败不中断主链路。
 
 ---
 
 ## 生态全景
 
-本仓库是「跨境电商 AI 生态」四层里的**底座层**，上游还有一个仓库承接数据层、业务层与交付层：
-
 | 层 | 仓库 | 内容 |
 | --- | --- | --- |
-| **① 底座层** | **本仓库** `ecom-agent-runtime` | 双引擎运行时 · MCP 工具集群 · LLM Gateway · Agent 公共链路 |
-| ② 数据层 | [`ecommerce-ai-workbench`](https://github.com/rchzc/ecommerce-ai-workbench) | RAG 知识库（26 篇 / 384 切片 · 混合重排）· AI 数据中台 · 平台数据连接器 |
-| ③ 业务层 | 同上 | 7 个业务 Agent（选品 / Listing / 评论 / 广告 / 物流 / 客服 / 补货） |
-| ④ 交付层 | 同上 | 单容器交付 · 128 个测试用例 · Webhook 对外集成 · 结构化日志 |
+| **① 底座层** | **本仓库** `ecom-agent-runtime` | 双引擎编排 · 自进化闭环 · MCP 工具服务 · 意图路由 |
+| ② 共享集群 | [`ecom-agent-shared`](https://github.com/rchzc/ecom-agent-shared) | LLM 网关（四厂商统一接入）· RAG as a Service · 记忆 · Prompt 注册中心 · MCP 工具协议 · 137 个测试 |
+| ③ 应用层 | [`ecommerce-ai-workbench`](https://github.com/rchzc/ecommerce-ai-workbench) | RAG 知识库与数据中台 · 业务 Agent 集群 · 单容器交付 |
 
-> ②③④ 共用同一个 FastAPI 后端与 `core/` 基础设施，因此放在同一仓库按层组织；本仓库（①）与它们**无代码依赖**，可独立 clone 运行。
+依赖方向单向：③ → ① → ②。本仓库可独立 clone 运行。
